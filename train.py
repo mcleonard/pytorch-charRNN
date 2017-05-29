@@ -5,49 +5,65 @@ Copyright (c) 2017 Mat Leonard
 
 '''
 
-from torch import nn
-from torch.autograd import Variable
+import argparse
+import os
 
-from utils import get_batches, one_hot_encode
+import numpy as np
 
-def train(net, data, epochs=10, n_seqs=10, n_steps=50, clip=5, cuda=False, print_every=10):
-    """ Train a network and data
+from model import CharRNN, save_model, load_model, train
+from utils import get_lookup_tables
 
-    """
-    net.train()
-    if cuda:
-        net.cuda()
-    counter = 0
-    n_chars = len(net.chars)
-    for e in range(epochs):
-        h = net.init_hidden(n_seqs)
-        for x, y in get_batches(data, n_seqs, n_steps):
-            counter += 1
-            
-            # One-hot encode our data and make them Torch tensors
-            x = one_hot_encode(x, n_chars)
-            x, y = torch.from_numpy(x), torch.from_numpy(y)
-            
-            inputs, targets = Variable(x), Variable(y)
-            if cuda:
-                inputs, targets = inputs.cuda(), targets.cuda()
+parser = argparse.ArgumentParser(
+                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--in_file', type=str,
+                    help='input text file')
+parser.add_argument('--save_dir', type=str, default='save',
+                    help='directory to store checkpointed models')
+parser.add_argument('--rnn_size', type=int, default=128,
+                    help='size of RNN hidden state')
+parser.add_argument('--num_layers', type=int, default=2,
+                    help='number of layers in the RNN')
+parser.add_argument('--batch_size', type=int, default=50,
+                    help='minibatch size')
+parser.add_argument('--seq_length', type=int, default=50,
+                    help='RNN sequence length')
+parser.add_argument('--num_epochs', type=int, default=25,
+                    help='number of epochs')
+parser.add_argument('--print_every', type=int, default=20,
+                    help='print frequency')
+parser.add_argument('--grad_clip', type=float, default=5.,
+                    help='clip gradients at this value')
+parser.add_argument('--learning_rate', type=float, default=0.002,
+                    help='learning rate')
+parser.add_argument('--dropout_prob', type=float, default=1.0,
+                    help='probability of dropping weights')
+parser.add_argument('--cuda', type=bool, default=False,
+                    help='run the network on the GPU')
+parser.add_argument('--init_from', type=str, default=None,
+                    help='initialize network from checkpoint')
 
-            # Creating new variables for the hidden state, otherwise
-            # we'd backprop through the entire training history
-            h = tuple([Variable(each.data) for each in h])
+args = parser.parse_args()
 
-            net.zero_grad()
-            
-            output, h = net.forward(inputs, h)
-            loss = net.criterion(output, targets.view(n_seqs*n_steps))
+if not os.path.isdir(args.save_dir):
+    raise OSError(f'Directory {args.save_dir} does not exist.')
 
-            loss.backward()
-            
-            # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
-            nn.utils.clip_grad_norm(net.parameters(), clip)
-            net.opt.step()
-            
-            if counter % print_every == 0:
-                print("Epoch: {}/{}...".format(e+1, epochs),
-                      "Step: {}...".format(counter),
-                      "Loss: {:.4f}".format(loss.data[0]))
+with open(args.in_file, 'r') as f:
+    text = f.read()
+
+int2char, char2int = get_lookup_tables(text)
+encoded = np.array([char2int[ch] for ch in text])
+chars = tuple(char2int.keys())
+
+if args.init_from is None:
+    net = CharRNN(chars, n_hidden=args.rnn_size, n_layers=args.num_layers)
+else:
+    net = load_model(args.init_from)
+
+val_loss = train(net, encoded, epochs=args.num_epochs, n_seqs=args.batch_size, 
+                               n_steps=args.seq_length, lr=args.learning_rate, 
+                               cuda=args.cuda, print_every=args.print_every)
+
+save_file = f'charRNN_{val_loss:.4f}.ckpt'
+
+save_model(net, os.path.join(args.save_dir, save_file))
+print(f'File saved as {save_file}')

@@ -5,8 +5,10 @@ Copyright (c) 2017 Mat Leonard
 
 '''
 
+import numpy as np
+
 def get_lookup_tables(text):
-    chars = set(text)
+    chars = tuple(set(text))
     int2char = dict(enumerate(chars))
     char2int = {ch: ii for ii, ch in int2char.items()}
     
@@ -48,3 +50,5 @@ def one_hot_encode(arr, n_labels):
     one_hot = one_hot.reshape((*arr.shape, n_labels))
     
     return one_hot
+
+
