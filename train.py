@@ -35,9 +35,9 @@ parser.add_argument('--grad_clip', type=float, default=5.,
                     help='clip gradients at this value')
 parser.add_argument('--learning_rate', type=float, default=0.002,
                     help='learning rate')
-parser.add_argument('--dropout_prob', type=float, default=1.0,
+parser.add_argument('--dropout_prob', type=float, default=0.5,
                     help='probability of dropping weights')
-parser.add_argument('--cuda', type=bool, default=False,
+parser.add_argument('--gpu', action='store_true', default=False,
                     help='run the network on the GPU')
 parser.add_argument('--init_from', type=str, default=None,
                     help='initialize network from checkpoint')
@@ -61,9 +61,9 @@ else:
 
 val_loss = train(net, encoded, epochs=args.num_epochs, n_seqs=args.batch_size, 
                                n_steps=args.seq_length, lr=args.learning_rate, 
-                               cuda=args.cuda, print_every=args.print_every)
+                               cuda=args.gpu, print_every=args.print_every)
 
 save_file = f'charRNN_{val_loss:.4f}.ckpt'
 
 save_model(net, os.path.join(args.save_dir, save_file))
-print(f'File saved as {save_file}')
+print(f'Network saved as {save_file}')
